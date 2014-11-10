@@ -1,5 +1,6 @@
 #! /usr/bin/python
 # -*- coding:utf-8 -*-
+__author__ = "Kensuke Mitsuzawa"
 import pandas as pd
 import statsmodels.api as sm
 
@@ -114,9 +115,63 @@ def CallLogisticRegression(fp_dau1_cast):
     X = fp_dau1_cast.ix[:, list_explain_variable]
     X = sm.add_constant(X, prepend=False)
     Y = fp_dau1_cast['is_sp']
-    model = sm.GLM(Y, X)
+    model = sm.Logit(Y, X)
     results = model.fit()
     print results.summary()
+
+    return results
+
+
+def Prediction(results, fp_dau1_cast):
+    """
+    訓練に使ったデータの確率を算出してみて、
+    確率を元にbinaryの２値分類を行う
+    """
+    list_explain_variable = ['X{}day'.format(day) for day in range(1, 32)]
+    X = fp_dau1_cast.ix[:, list_explain_variable]
+    X = sm.add_constant(X, prepend=False)
+    estimated_prob = results.predict(X)
+
+    rounded_estimated_data = [round(item, 2) for item in estimated_prob]
+    fp_dau1_cast['prob'] = rounded_estimated_data
+
+    # 0.5を閾値に0,1の２値分類する
+    ifelse_func = lambda x: 1 if x > 0.5 else 0
+    fp_dau1_cast['pred'] = fp_dau1_cast['prob'].apply(ifelse_func)
+
+    print (fp_dau1_cast.head())
+
+    return fp_dau1_cast
+
+
+def CheckResult(fp_dau1_cast):
+    cross_result = pd.crosstab(fp_dau1_cast['is_sp'], fp_dau1_cast['pred'])
+    print (cross_result)
+
+
+def CheckAccessOfTargetUser(fp_dau1_cast):
+    """
+    クロステーブルを作って結果の確認
+    """
+    fp_dau1_cast = fp_dau1_cast[
+        (fp_dau1_cast.is_sp == 1) & (fp_dau1_cast.pred == 1)]
+    print (fp_dau1_cast.sort(['prob'], ascending=False).head())
+
+
+def CheckAccessOfWrongPredictionUsers(fp_dau1_cast):
+    """
+    予測が間違ってしまったユーザー群の確認
+    """
+    # 予測が１　でも実際は０だったユーザーの確認
+    fp_dau1_cast2 = fp_dau1_cast[
+        (fp_dau1_cast.is_sp == 0) & (fp_dau1_cast.pred == 1)]
+    print (fp_dau1_cast2.sort(['prob'], ascending=False).head())
+
+    # 予測が０　でも実際は１だったユーザーの確認
+    fp_dau1_cast3 = fp_dau1_cast[
+        (fp_dau1_cast.is_sp == 1) & (fp_dau1_cast.pred == 0)]
+    print (fp_dau1_cast3.sort(['prob'], ascending=True).head())
+
 
 if __name__ == '__main__':
     dau = LoadData()
@@ -124,10 +179,8 @@ if __name__ == '__main__':
     fp_mau1, fp_mau2, sp_mau1, sp_mau2 = SplitData(mau, fp_mau, sp_mau)
     fp_mau1 = MergeData(mau, fp_mau1, fp_mau2, sp_mau1, sp_mau2)
     fp_dau1_cast = PrepareAccessLogPerData(dau, fp_mau1)
-    """
-    # TODO
-    # bionomialのオプションを与える
-    # stepに相当するものをみつける 
-    # モデルのサマリを見れるようにしておく。特にAIC
-    """
-    CallLogisticRegression(fp_dau1_cast)
+    results = CallLogisticRegression(fp_dau1_cast)
+    fp_dau1_cast = Prediction(results, fp_dau1_cast)
+    CheckResult(fp_dau1_cast)
+    CheckAccessOfTargetUser(fp_dau1_cast)
+    CheckAccessOfWrongPredictionUsers(fp_dau1_cast)
