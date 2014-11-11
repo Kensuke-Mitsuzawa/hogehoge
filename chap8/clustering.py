@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 import datetime
 import pandas as pd
+from sklearn.cluster import KMeans
 
 
 def ReadTsvDates(base_dir, app_name, date_from, date_to):
@@ -81,6 +82,47 @@ def PrepareMauDate(dau2):
 
     return mau
 
+
+def CallKmeans(input_array, NUM_CLUSTERS=10):
+    km = KMeans(n_clusters=NUM_CLUSTERS,
+                init='k-means++', n_init=1, verbose=True)  # Kmeansインスタンスを作成
+    km.fit(input_array)  # 実データにfitting
+    labels = km.labels_  # 各要素にクラス番号をふる  戻り値はnumpy.ndarray
+
+    return labels
+
+
+def DokMenasClusteringFrist(user_action):
+    # dfからarrayに変換する
+    df_clustering_input = user_action.ix[:, ['A47']]
+    user_action_array = df_clustering_input.as_matrix()
+    # ここにクラスタリングを実行するコードを記述
+    array_cluster_label = CallKmeans(user_action_array, 3)
+    series_cluster_label = pd.Series(array_cluster_label)
+    # padnasではseriesに対して要素カウントするときは、series.value_counts()を使う
+    print (series_cluster_label.value_counts())
+    df_cluster_label = pd.DataFrame(array_cluster_label)
+    df_cluster_label.columns = ['cluster_label']
+    # cbindの操作
+    user_action = pd.concat([user_action, df_cluster_label], axis=1)
+    return user_action
+
+
+def CallPCA():
+    """
+    statsmodelからPCAを呼ぶ
+    """
+
+
+def DoPCA():
+    """
+    PCAを実行する
+    """
+    # 情報量が０に近い変数の削除
+
+    # 変数間の相関が高い変数の削除 
+
+
 def Main():
     """
     dau = ReadDau('game-01', '2013-10-01', '2013-10-31')
@@ -89,7 +131,12 @@ def Main():
     mau = PrepareMauDate(dau2)
     """
     user_action = ReadActionDaily('game-01', '2013-10-31', '2013-10-31')
-    print user_action.head()
+    user_action = DokMenasClusteringFrist(user_action)
+    user_action_h = user_action[user_action.cluster_label >= 1]
+    # ランキングポイント分布を描画すること
+    # 後処理コードを記述
+    # PCAするコードを記述
+
 
 if __name__ == '__main__':
     # base_dir = '../sample_data/sample-data/section8/daily/dau/'
