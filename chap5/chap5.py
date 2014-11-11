@@ -51,29 +51,26 @@ def Calc_func2(x):
 
 
 def SummarisePerdate(ab_test_imp):
-    # ab_test_imp_summary = ab_test_imp.groupby(
-    #    ['log_date_x', 'test_case_x']).agg(
-    #        {'user_id_x': {'imp': 'size'},
-    #         'is_goal': {'cv': 'sum'},
-    #         'aa': 'mean'})
-    ab_test_imp_summary = ab_test_imp.groupby(
-        ['log_date_x', 'test_case_x'])[['user_id_x', 'is_goal']].apply(Calc_func)
-    ab_test_imp_summary = pd.DataFrame(ab_test_imp_summary).reset_index()
-    
+    """
+    multi-indexを解除するには、groupbyの引数にas_index=Falaseを書くか、
+    reset_index()メソッドを最後に適用する
+    """
     ab_test_imp_sum_length_summary = ab_test_imp.groupby(
         ['log_date_x', 'test_case_x']).agg(
             {'user_id_x': {'imp': 'size'},
-             'is_goal': {'cv': 'sum'}})
-    ab_test_imp_sum_length_summary = pd.DataFrame(ab_test_imp_sum_length_summary).reset_index()
-
+             'is_goal': {'cv': 'sum'}}).reset_index()
     ab_test_imp_sum_length_summary.columns = ['log_date_x', 'test_case_x', 'cv', 'imp']
     Calc_func2 = lambda x: float(sum(x.cv)) / sum(x.imp)
-    ab_test_imp_summary = ab_test_imp_sum_length_summary.groupby('test_case_x').apply(Calc_func2)
-    print ab_test_imp_summary
+    ab_test_imp_summary = ab_test_imp_sum_length_summary.groupby(
+        ['test_case_x', 'log_date_x'], as_index=False).apply(
+            Calc_func2).reset_index()
+
+    return ab_test_imp_summary
 
 if __name__ == '__main__':
     ab_test_goal, ab_test_imp = LoadData()
     ab_test_imp = MergeData(ab_test_goal, ab_test_imp)
     ab_test_imp = MakeNewFlag(ab_test_imp)
     SummariseClickRate(ab_test_imp)
-    SummarisePerdate(ab_test_imp)
+    ab_test_imp_summary= SummarisePerdate(ab_test_imp)
+    # あとは図を書くだけ
