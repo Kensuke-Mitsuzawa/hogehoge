@@ -1,15 +1,22 @@
 #! /usr/bin/python
 # -*- coding:utf-8 -*-
+
+import os
 import pandas as pd
 import datetime
 import numpy as np
+from sklearn import cluster
 from sklearn.decomposition import PCA
+
+from sklearn import tree
+
 
 
 def ReadInstall(app_name, target_day):
 
     base_dir = '../sample_data/sample-data/section9/snapshot/install'
-    f = '{}/{}/{}/install.csv'.format(base_dir, app_name, target_day)
+    # f = '{}/{}/{}/install.csv'.format(base_dir, app_name, target_day)
+    f = os.path.join(base_dir, app_name, target_day, 'install.csv')
     df_Loaded = pd.read_csv(f, sep=",")
 
     return df_Loaded
@@ -42,7 +49,8 @@ def ReadSeqDate(app_name, date_from, date_to, f_type, base_dir, action_name=''):
 
     x = pd.DataFrame()
     for date in date_seq:
-        data_path = '{}/{}/{}'.format(data_path_base, date, f_name)
+        # data_path = '{}/{}/{}'.format(data_path_base, date, f_name)
+        data_path = os.path.join(data_path_base, date, f_name)
         loaded_data = pd.io.parsers.read_csv(
             filepath_or_buffer=data_path, sep=",")
         x = x.append(loaded_data)
@@ -83,7 +91,6 @@ def CalcLoginRate(df_dau, df_install):
              on='user_id', suffixes=('', '_inst'))
     df_dau_inst['log_date'] = df_dau_inst['log_date'].apply(date_conv_func)
     df_dau_inst['log_date_inst'] = df_dau_inst['log_date_inst'].apply(date_conv_func)
-
     df_dau_inst.is_copy = False
     df_dau_inst['elapsed_days'] = df_dau_inst.apply(lambda x: (x.log_date - x.log_date_inst), axis=1)
     df_dau_inst['elapsed_days'] =\
@@ -203,6 +210,47 @@ def PrepareMergedData(df_input1, df_input2):
     return df_merged_cast
 
 
+def CallKmeans(input_df, NUM_CLUSTERS=10, MAX_ITER=100, N_INIT=10):
+    km = cluster.KMeans(n_clusters=NUM_CLUSTERS,
+                init='k-means++', n_init=N_INIT,
+                verbose=True, max_iter=MAX_ITER)  # Kmeansインスタンスを作成
+    km.fit(input_df)  # 実データにfitting
+    labels = km.labels_  # 各要素にクラス番号をふる  戻り値はnumpy.ndarray
+
+    return labels
+
+
+def DoKmeansProcess(column_prefix_name, df_freq, df_prob, df_pca):
+    """
+    kmenasを使ったクラスタリング処理（と前・後処理）を実施する
+    ID3からID4のみでforループ回して、kmeansの実行。ラベルを取得する。
+    """
+    # for dev
+    column_prefix_name = "battle"
+    df_freq = battle_install_merged_cast
+    df_prob = battle_install_prob
+    df_pca = battle_install_pca
+    column_id = 3
+    # params
+    ID_RANGE_FROM = 3
+    ID_RANGE_TO = 6
+
+
+    # スタック用のデータフレーム
+    df_stack['user_id'] = pd.DataFrame(df_freq.index)
+
+    for column_id in range(ID_RANGE_FROM, ID_RANGE_TO + 1):
+        freq_col_name = 'cluster_{}_freq_{}'.format(column_prefix_name, column_id)
+        df_stack[freq_col_name] = CallKmeans(df_freq, column_id)
+        prob_col_name = 'cluster_{}_prob_{}'.format(column_prefix_name, column_id)
+        df_stack[prob_col_name] = CallKmeans(df_prob, column_id)
+        pca_col_name = 'cluster_{}_pca_{}'.format(column_prefix_name, column_id)
+        df_stack[pca_col_name] = CallKmeans(df_pca, column_id)
+
+
+
+
+
 def PrepareEachData(df_input1, df_input2, DIM_NUM=7):
     df_merged_cast = PrepareMergedData(df_input1, df_input2)  # 前処理
     df_cast_prop, df_cast_pca =\
@@ -230,17 +278,20 @@ def Main():
                             "help")
 
     df_dau_inst_7_13_login_ds = CalcLoginRate(df_dau, df_install)
-    df_target_install_login_ds = MergeTargetUserAndLoginRate(
-        df_install, df_dau_inst_7_13_login_ds)
+    df_target_install_login_ds = MergeTargetUserAndLoginRate(df_install, df_dau_inst_7_13_login_ds)
     # バトルとインストールからなるデータの用意
-    battle_install_merged_cast, battle_install_prob, battle_install_pca =\
-        PrepareEachData(df_battle, df_install)
+    battle_install_merged_cast, battle_install_prob, battle_install_pca = PrepareEachData(df_battle, df_install)
     # メッセージとインストールからなるデータの用意
-    msg_install_merged_cast, msg_install_prob, msg_install_pca =\
-        PrepareEachData(df_msg, df_install)
+    msg_install_merged_cast, msg_install_prob, msg_install_pca = PrepareEachData(df_msg, df_install)
     # 協力とインストールからなるデータの用意
-    help_install_merged_cast, help_install_prob, help_install_pca =\
-        PrepareEachData(df_help, df_install)
+    help_install_merged_cast, help_install_prob, help_install_pca = PrepareEachData(df_help, df_install)
+
+    # kmeansクラスタリングする関数を作成
+    # 引数にとるのは、列の名前、データ、確率化したデータ、pcaかけたデータの３種
+    # RETURN user_idが１列とデータ種別が３*ID3~6へのクラスタ番号　の合計 １３列のはず
+
+    # バトル、メッセージ、協力　の順にkmenasクラスタリングを実施する
+
 
 if __name__ == '__main__':
     Main()
