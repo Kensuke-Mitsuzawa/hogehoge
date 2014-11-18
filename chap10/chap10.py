@@ -6,7 +6,12 @@ import pandas as pd
 import datetime
 import numpy as np
 import os
+from sklearn import preprocessing
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.grid_search import GridSearchCV
+import multiprocessing
+n_multi_core = multiprocessing.cpu_count()
+
 
 def read_action_hourly(app_name, date_from, date_to):
     date_from = datetime.datetime.strptime(date_from, '%Y-%m-%d')
@@ -122,13 +127,47 @@ def prepare_array_like_data(df_preprocessed):
     return stack_map
 
 
-def call_random_forest(input_training, input_gold):
-    # アンサンブル学習を実行する
-    rf = RandomForestClassifier()
-    rf.fit(input_training, input_gold)
-    res = rf.predict(input_training)
+def dimention_preprocess(row_array_data, mean=True, std=True):
+    """
 
-    result_map = {'model': rf, 'res': res, 'gold': input_gold}
+    :param row_array_data:
+    :param mean: 平均化を行う
+    :param std: 偏差揃えを行う
+    :return:
+    """
+    scaler = preprocessing.StandardScaler(with_mean=mean,
+                                          with_std=std).fit(row_array_data)
+    normalized_array = scaler.transform(row_array_data)
+
+    return normalized_array
+
+
+def call_random_forest(input_training, input_gold, Grid=False):
+    """
+
+    :param input_training:
+    :param input_gold:
+    :param Grid:
+    :return:
+    """
+    if Grid == True:
+        #tuned_parameters = [{'n_estimators': [10, 30, 50, 70, 90, 110, 130, 150],
+        #                     'max_features': ['auto', 'sqrt', 'log2', None]}]
+        tuned_parameters = [{'n_estimators': [10],
+                             'max_features': ['auto']}]
+        clf = GridSearchCV(RandomForestClassifier(),
+                           tuned_parameters, cv=2, scoring='accuracy', n_jobs=n_multi_core)
+        res = clf.fit(input_training, input_gold)
+
+        result_map = {'model': clf, 'res': res, 'gold': input_gold}
+
+    else:
+        # アンサンブル学習を実行する
+        rf = RandomForestClassifier()
+        rf.fit(input_training, input_gold)
+        res = rf.predict(input_training)
+
+        result_map = {'model': rf, 'res': res, 'gold': input_gold}
 
     return  result_map
 
@@ -188,17 +227,16 @@ def __UNUSED_prepare_array_like_data(action_hourly):
         stack_map[target_hour] = (user_id, array_training_data, array_gold_data_1d)
 
 
-
 def Main():
     action_hourly = read_action_hourly('game-01', '2013-08-01', '2013-08-08')
     df_preprocessed = preprocess_action_log(action_hourly)
     input_stack_map = prepare_array_like_data(df_preprocessed)
 
-    # あとはココラヘンに前処理を記述する
     list_result_stack = []
     for target_hour in input_stack_map:
         input_tuple = input_stack_map[target_hour]
-        result_map = call_random_forest(input_tuple[0], input_tuple[1])
+        scaled_input_array = dimention_preprocess(input_tuple[0])
+        result_map = call_random_forest(scaled_input_array, input_tuple[1], Grid=False)
         result_map['hour'] = target_hour
         list_result_stack.append(result_map)
 
@@ -219,6 +257,8 @@ def Main():
         print '='*30
 
 
+if __name__ == '__main__':
+    Main()
 
 
 
